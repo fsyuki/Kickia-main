@@ -9194,5 +9194,41 @@ local function boot_complete_script()
     end)
 end
 
-pcall(boot_complete_script)
+-- wait for game to fully load before booting
+task.spawn(function()
+    -- 1. Wait for the game to finish loading
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
+    end
+
+    -- 2. Wait for local player character to exist
+    local lp = game:GetService("Players").LocalPlayer
+    if not lp.Character then
+        lp.CharacterAdded:Wait()
+    end
+    task.wait(0.5) -- small buffer after character spawns
+
+    -- 3. Wait for ReplicatedStorage remotes to exist (fixes ReplicateUnreliable error)
+    local rs = game:GetService("ReplicatedStorage")
+    local ok1, remotes = pcall(function()
+        return rs:WaitForChild("Remotes", 15)
+    end)
+    if ok1 and remotes then
+        pcall(function() remotes:WaitForChild("Replication", 10) end)
+        pcall(function()
+            local fighter = remotes:WaitForChild("Fighter", 10)
+            if fighter then fighter:WaitForChild("ReplicateUnreliable", 10) end
+        end)
+    end
+
+    -- 4. Wait for the characters folder in workspace
+    local tries = 0
+    while not workspace:FindFirstChild("characters") and tries < 60 do
+        task.wait(0.5)
+        tries = tries + 1
+    end
+
+    -- 5. Now it's safe to boot
+    pcall(boot_complete_script)
+end)
 
